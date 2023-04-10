@@ -73,7 +73,9 @@ def pathPaser(file_name: str, primers:list):
     return path_var
 
 def checkRecordDict(record_dict, path_var: list):
-    # 判断在record_dict中path_var中保存的sample和primer是不是存在
+    """
+    判断在record_dict中path_var中保存的sample和primer是不是存在
+    """
     if path_var['sample'] in record_dict:
         for record in record_dict[path_var['sample']]:
             if record.primer == path_var['primer']:
@@ -325,9 +327,6 @@ def main(folder="", primers=['27F', '1492R'], mod="auto", check_len=0, thredhold
                     # Write each sequence to the output file
                     SeqIO.write(seq, output_file, "fasta")
     return merge_dict
-
-
-
 
 if __name__ == "__main__":
     # 创建参数解析器
