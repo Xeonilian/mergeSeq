@@ -3,6 +3,7 @@ from datetime import datetime
 import pandas as pd
 import gzip
 import os
+import pandas as pd
 
 def cleanGbff(dbPath=""):
     """
@@ -66,9 +67,7 @@ def cleanGbff(dbPath=""):
     res.to_csv(f"tax-typestrain-{date}.csv", index=False)
     return res
 
-
-
-def cleanFna(dbPath=""):
+def cleanFna(res, dbfile, dbPath=""):
     """
     Input: the path of database
         - folder_name: tax-ncbidata-<date> 
@@ -80,10 +79,13 @@ def cleanFna(dbPath=""):
 
     """
     date = datetime.now().strftime("%Y%m%d")
-    if os.path.exists(dbPath):
-        os.chdir(dbPath)
-    else:
-        Print("Wrong path")
+    if not isinstance(res, isinstance(res, pd.DataFrame)):
+        if os.path.exists(dbPath):
+            os.chdir(dbPath)
+            res = pd.read.csv(dbfile)
+        else:
+            Print("Wrong path")
+            return -1
     # open the fasta file
     records = SeqIO.parse("bacteria.16SrRNA.fna", "fasta")
     # create an empty list to store the type strain records
