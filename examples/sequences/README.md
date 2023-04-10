@@ -1,0 +1,8 @@
+- 0005_31320101600206_(5)_[27F].ab1| excluded because not in pair
+- 0005_31320101300621_(5)_[27F].ab1| imported
+- 0005_31320101300621_(5)_[1492R].ab1     | imported
+- 0005_31320101300621_(5)_[1492R].fasta   | excluded because the file with same sample name in ab1 form was imorted
+- 0005_31320101300621_(5)_[1492R].seq|excluded because the file with same sample name in ab1 form was imorted; not in fasta format but can be imported.
+- 0005_31320101300621_(5)_[merge].fasta|The merged result, single sequence
+- batch_blast.fasta| concatenated faste seqeucnes for blast
+- batch_blast.csv|the blast returned table format result
