@@ -5,6 +5,7 @@ from datetime import datetime
 import gzip
 import shutil
 import glob
+import argparse
 
 """
     当16S rRNA基因序列数据库需要更新时，从NCBI数据库下载bacteria.16SrRNA.fna和bacteria.16SrRNA.gbff数据。筛选typestain
@@ -137,9 +138,7 @@ def getDb(db_path="", fna=True, gbff=True):
         else:
             print("Error: Could not retrieve gbff from NCBI")
 
-
-
-def main(db_path="", db_folder="", db=True, fna=True, gbff=True):
+def main():
     """
     运行获取数据库，清理数据得到只有模式菌株的数据。
     Args: 
@@ -155,27 +154,44 @@ def main(db_path="", db_folder="", db=True, fna=True, gbff=True):
         - bacteria.16SrRNA.fna.gz <optional>
         - bacteria.16SrRNA.gbff.gz <optional>
     """
-    if os.path.exists(db_path): # 存在指定路径
-        if not db_folder=="": #新建一个文件夹，并设置为当前路径
-            os.chdir(db_path)
-            if os.path.exists(db_folder):
+    # 创建参数解析器
+    parser = argparse.ArgumentParser()
+    # 添加参数
+    parser.add_argument('--db_path', type=str, default="", help='the path used to store db')    
+    parser.add_argument('--db_folder', type=str, default="", help='the folder used to store db')
+    parser.add_argument('--db', type=bool, default="False", help='wether download database from NCBI')
+    parser.add_argument('--fna', type=bool, default="True", help='download fna file')
+    parser.add_argument('--gbff', type=bool, default="True", help='download gbff file')
+    # 解析参数
+    args = parser.parse_args()
+    # 测试用 完成调试
+    #args.db_path="E:\\Desktop\\python-learn-2023\\4-mergeSeq\\mergeSeq\\examples"
+    #args.db_folder="16SDB-20230412"
+    #args.db=False
+    #args.fna=False
+    #args.gbff=False
+    
+
+    if os.path.exists(args.db_path): # 存在指定路径
+        if not args.db_folder=="": #新建一个文件夹，并设置为当前路径
+            os.chdir(args.db_path)
+            if os.path.exists(args.db_folder):
                 print("Folder already exists")
-                db_path = os.path.join(db_path,db_folder)
+                db_path = os.path.join(args.db_path, args.db_folder)
             else:
-                os.mkdir(db_folder)
+                os.mkdir(args.db_folder)
                 print("Folder created")
-                db_path = os.path.join(db_path,db_folder)
+                db_path = os.path.join(args.db_path, args.db_folder)
             os.chdir(db_path)
         
-        if db: #下载到
+        if args.db: #下载到
             print("download db from NCBI")
             try:
-                getDb(db_path=db_path, fna=fna, gbff=gbff)
+                getDb(db_path=db_path, fna=args.fna, gbff=args.gbff)
             except:
                 print("error: not downloaded!")
         else:
             print("skip db download")
-
         if os.path.exists("bacteria.16SrRNA.gbff.gz") and os.path.exists("bacteria.16SrRNA.fna.gz"):
             if any(filename.startswith("tax-typestrain") for filename in os.listdir(db_path)):
                 print("tax-typestrain file import \nstart fna clean")
@@ -188,31 +204,12 @@ def main(db_path="", db_folder="", db=True, fna=True, gbff=True):
                 cleanFna(res, db_path)
                 print("fna clean")            
         else:
-            print("Need fna file and gbff file.\n Set --db True can download files from NCBI")
+            print("Need fna file and gbff file.\nSet --db True can download files from NCBI")
     else:
-        if db_path=="":
+        if args.db_path=="":
             print("db_path is requeried, can set using --db_path <path>")
         else:
             print("Error: wrong path")          
 
-if __name__ == "__main__":
-    import argparse
-    # 创建参数解析器
-    parser = argparse.ArgumentParser(description='Process some variables.')
-    # 添加参数
-    parser.add_argument('--db_path', type=str, default="", help='the path used to store db')    
-    parser.add_argument('--db_folder', type=str, default="", help='the folder used to store db')
-    parser.add_argument('--db', type=bool, default="False", help='wether download database from NCBI')
-    parser.add_argument('--fna', type=bool, default="True", help='download fna file')
-    parser.add_argument('--gbff', type=bool, default="True", help='download gbff file')
-    # 解析参数
-    args = parser.parse_args()
-    # 测试用 完成调试
-    # args.db_path="E:\\Desktop\\python-learn-2023\\4-mergeSeq\\mergeSeq\\examples"
-    # args.db_folder="16SDB-20230412"
-    # args.db=False
-    #args.fna=True
-    #args.gbff=True
-    
-    # 运行main函数
-    main(args.db_path, args.db_folder, args.db, args.fna, args.gbff)
+if __name__ == "__main__":  
+    main()
