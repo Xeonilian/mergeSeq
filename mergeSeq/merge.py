@@ -6,7 +6,6 @@ from Bio.Seq import Seq
 from collections import defaultdict
 from tkinter import filedialog, Tk
 
-
 def ab1IO(path_var: list, verbose=True):
     '''
     导入ab1文件
@@ -65,32 +64,32 @@ def fasIO(path_var: list, verbose=True):
             print(f"import seq:{record.sample} {record.primer}")
         return record
 
-def pathPaser(path: str, primers:list, verbose=True) -> dict:
+def pathPaser(path: str, primers:list,  regex_para:list, verbose=True) -> dict:
     '''
     根据引物对信息解析文件名信息。
     
     Args:
         path: <str> 文件的路径。
         primers: <list> 引物列表。
+        regex_para:<list> primer所属group，sample所属的group，正则表达式，默认为生工序列的解析方式。
         
     Returns:
         path_var: <dict> 包含文件类型、文件名、样本名、引物名和'check'键的值。
             如果引物不在列表中，则'check'键的值为False。
-            如果引物在列表中，则'check'键的值为True。
-            
+            如果引物在列表中，则'check'键的值为True。      
     '''
     path_var = {}
     try:
         path_var['file_type'] = os.path.splitext(os.path.basename(path))[-1]
         path_var['name'] = os.path.splitext(os.path.basename(path))[0]
-        match = re.search(r"\w{4}_(.*)_\[(\w+)\]", path_var['name'])
-        if match.group(2) not in primers:
+        match = re.search(regex_para[2], path_var['name'])
+        if match.group(regex_para[0]) not in primers:
             path_var['check'] = False
             if verbose:
                 print(f"pass: {path}")
         else:
-            path_var['primer'] = match.group(2)
-            path_var['sample'] = match.group(1)
+            path_var['primer'] = match.group(regex_para[0])
+            path_var['sample'] = match.group(regex_para[1])
             path_var['path'] = path
             path_var['check'] = True
     except:
@@ -121,20 +120,21 @@ def checkRecordDict(record_dict: defaultdict, path_var: dict, verbose=True) -> b
                 return True
     return False
 
-def checkFiles(paths, primers) ->defaultdict:
+def checkFiles(paths, primers, regex_para) ->defaultdict:
     """
     根据文件名和待拼接的成对引物，生成一个字典存放导入的结果。
 
     Args:
         paths: <list> 文件名列表。
         primers: <list> 引物列表。
+        regex_para:<list> primer所属group，sample所属的group，正则表达式。
 
     Returns:
         record_dict: <defaultdict> 包含样本名和对应的序列记录列表的字典。
     """ 
     record_dict = defaultdict(list)
     for path in paths:
-        path_var = pathPaser(path, primers)
+        path_var = pathPaser(path, primers, regex_para)
         if path_var['check'] == True:
             record_dict[path_var['sample']] = []
     return record_dict
@@ -197,10 +197,9 @@ def phred2Index(record, check_len=0, thredhold=30, break_num=3):
     Phred_list_bool = Phred_list_bool[index[0]:]
     j=0
     for j, num in enumerate(Phred_list_bool):
-        if j < (len(Phred_list)-1)/2:
+        if j < (len(Phred_list)-1)/2: #过半之后开始找连续错误
             continue
         if not num: #出现了False
-            print(j)
             if not any(Phred_list_bool[j:j+break_num]):
                 index[1] = j+i
                 break
@@ -347,9 +346,54 @@ def mergeSeq(seq1, seq2, verbose=True):
         # 返回比对结果的数量
         return len(alignments)
 
+def setRegex(path="", path_regex=""):
+    """
+    检测路径通过一个正在表达式能否提取到样品名和引物，返回primer，sample对应的group，以及通过测试的正则表达式
+    Args:
+        path: <str> 通过input()输入，需要解析的路径
+        path_regex: <str> 用来解析的正则表达式
+    Returns:
+        regex_para: <list> [primer.index, sample.index, path_regex] 如果失败输出-1。
+    """
+    import os
+    import re
+    if not path:
+        path=input("input path for parsing:")
+    if not path_regex:
+        path_regex= input("input path regex:")
+    name_extension=os.path.splitext(os.path.basename(path))[-1]
+    name=os.path.splitext(os.path.basename(path))[0]
+    print(name)
+    print("regex:",path_regex)
+    match = re.search(path_regex,name)
+    if not match:
+        path_regex = input("Try another regex:")
+        if path_regex == chr(27) or path_regex =="":
+            return -1
+        else:
+            setRegex(path=path,path_regex=path_regex)
+    else:
+        for i in range(0,len(match.groups())+1): #match.groups() 和match.group()是不一样的
+            print(f"Group {i} is {match.group(i)}")
+        try:
+            primer_index = int(input("Which group is primer? no fit = -1:")) 
+            sample_index = int(input("Which group is sample? no fit = -1:")) 
+        except:
+            print("int is needed, -1 mean no fit and try new regex!")
+            return -1
+        if primer_index + sample_index>0:
+            return [primer_index, sample_index, path_regex]
+        else: 
+            path_regex = input("Try another regex:")
+            if path_regex == chr(27) or path_regex =="":
+                return -1
+            else:
+                setRegex(path=path, path_regex=path_regex)
+
+
 def main(folder="", primers=['27F', '1492R'], mod="auto", 
         check_len=0, thredhold=30, break_num=3, fastacut=[20, 750], 
-        verbose=True, out="none"):
+        verbose=True, out="none", set_regex=False, regex_para=[]):
     """
     Functions:
         1. 输入文件，优先导入ab1，生成record_dict
@@ -364,6 +408,8 @@ def main(folder="", primers=['27F', '1492R'], mod="auto",
         fastacut:<list> fasta序列的默认剪切范围，默认20-750bp。
         verbose: <bool> 是不是要显示数据处理的全过程
         out:导出数据：none-不导出，single-一个文件一条序列，one-结果导出为1个文件
+        set_regex: <bool>是否要设置文件名的解析正则表达式。
+        regex_para: <list> primer所属group，sample所属的group，正则表达式。
     Returns:
         merge_dict: <dict> 数据结构是{sample:[record1,record2,record3],}。
     """
@@ -389,15 +435,25 @@ def main(folder="", primers=['27F', '1492R'], mod="auto",
    
     # 文件排序 
     paths.sort(key=lambda x: (not x.endswith('ab1'), x.endswith('ab1') and x))
+    if set_regex:
+        #//Fix: 显示前10个导入的路径，选择其中1个进行解析，输出
+        regex_para= setRegex()
+        if regex_para == -1:
+            print("Failed: setting path_regex")
+            return
     # 解析文件名构建保存数据的字典
-    record_dict = checkFiles(paths, primers)
+    if len(regex_para)==3 and isinstance(regex_para, list):
+        record_dict = checkFiles(paths, primers, regex_para)
+    else:
+        print("need regex_para")
+        return
     if len(record_dict)==0:
         print("no qualified files in the path.")
         return
     # 遍历文件导入
     for path in paths:
         # 解析文件名 如果无法解析到primer信息，就停止导入
-        path_var = pathPaser(path, primers)
+        path_var = pathPaser(path, primers, regex_para)
         if path_var['check'] == True:
             # 判断该文件是否存在
             if not checkRecordDict(record_dict, path_var):
@@ -475,10 +531,17 @@ if __name__ == "__main__":
     parser.add_argument('--fastacut', nargs='+', default=[20, 750], help='range of fasta sequence to trim')
     parser.add_argument('--verbose', type=bool, default=True, help='whether to display processing information')
     parser.add_argument('--out', type=str, default='none', help='output data: none- no output, single- one sequence per file, one- output all data to one file')
+    parser.add_argument('--regex_para', nargs='+', default=[2, 1,"\\w{4}_(.*)_\\[(\\w+)\\]" ], help='list of primer names')
+    parser.add_argument('--set_reget', type=bool, default=False, help='whether set regex for file name parsing')
+
+
     # 解析参数
     args = parser.parse_args()
     # 运行main函数
     # 测试时使用
     #args.folder = "E:\\Desktop\\python-learn-2023\\4-mergeSeq\\mergeSeq\\examples\\sequences"
-    #args.out = "single"
-    main(args.folder, args.primers, args.mod, args.check_len, args.thredhold, args.break_num, args.fastacut, args.verbose, args.out)
+    args.out = "single"
+    #args.set_regex=True
+
+
+    main(folder = args.folder, out=args.out, regex_para=args.regex_para)
