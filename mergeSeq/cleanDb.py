@@ -13,12 +13,14 @@ import argparse
 date = datetime.now().strftime("%Y%m%d")
 def cleanGbff(db_path=""):
     """
+    清理数据库并保存为csv和db文件
     Args:
         db_path: the folder path that contains database files
     Returns:
         res: 如果成功pandas.dataframe，如果失败-1
     Output: 
         tax-typestrain-{date}.csv
+        tax-typestrain-{date}.db
     """
     res = pd.DataFrame(columns=["saccver", "sname", "staxonomy", "sstrain", "typestrain"])
 
@@ -49,6 +51,11 @@ def cleanGbff(db_path=""):
     res["typestrain"].fillna(False, inplace=True)
     res = res[res["typestrain"]]
     res.to_csv(f"tax-typestrain-{date}.csv", index=False)
+
+    import sqlite3
+    conn = sqlite3.connect(f"tax-typestrain-{date}.db")
+    res.to_sql('mytable', conn, index=False)
+    conn.close()
     return res
 
 def cleanFna(res="", db_path=""):
@@ -159,17 +166,19 @@ def main():
     # 添加参数
     parser.add_argument('--db_path', type=str, default="", help='the path used to store db')    
     parser.add_argument('--db_folder', type=str, default="", help='the folder used to store db')
-    parser.add_argument('--db', type=bool, default="False", help='wether download database from NCBI')
+    parser.add_argument('--db', type=bool, default="False", help='whether download database from NCBI')
     parser.add_argument('--fna', type=bool, default="True", help='download fna file')
     parser.add_argument('--gbff', type=bool, default="True", help='download gbff file')
+    parser.add_argument('--test', type=bool, default="False", help=' do test')
     # 解析参数
     args = parser.parse_args()
     # 测试用 完成调试
-    #args.db_path="E:\\Desktop\\python-learn-2023\\4-mergeSeq\\mergeSeq\\examples"
-    #args.db_folder="16SDB-20230412"
-    #args.db=False
-    #args.fna=False
-    #args.gbff=False
+    if args.test:
+        args.db_path="E:\\Desktop\\python-learn-2023\\4-mergeSeq\\mergeSeq\\examples"
+        args.db_folder="16SDB-20230412"
+        args.db=False
+        args.fna=False
+        args.gbff=False
     
 
     if os.path.exists(args.db_path): # 存在指定路径

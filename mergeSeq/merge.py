@@ -169,18 +169,18 @@ def checkPair(record_dict):
 
 def phred2Index(record, check_len=0, thredhold=30, break_num=3):
     """
-    将Phred转化为index
+    将Phred转化为index，找到第一个大于阈值的位置，然后从序列全长一半的位置开始找连续3个碱基的质量小于阈值的位置，返回位置信息。
 
     Args:
         record: <SeqRecord> 序列记录。
-        check_len: <int> 检查序列长度。
-        thredhold: <int> 阈值。
-        break_num: <int> 连续低于阈值的碱基数。
+        check_len: <int> 检查序列长度，默认为0也就是不检查。
+        thredhold: <int> 阈值，默认30。
+        break_num: <int> 连续低于阈值的碱基数，默认3，数字越大返回的序列越长。
 
     Returns:
         index: <list> 包含起始和终止位置的列表。
     
-    Note: //Fix 如果thredhold调整为20或40效果与预期不同 
+    Note: thredhold调整为20或40效果没有进行测试，目前30能够从>1000bp的序列中返回800bp左右的序列
     """
     index = [-1, -1]  # 如果是空的，后面赋值就会有问题，这里有-1+1=0也没有办法通过最后的长度检测
     # 根据阈值转变为boolean值
@@ -358,16 +358,16 @@ def setRegex(path="", path_regex=""):
     import os
     import re
     if not path:
-        path=input("input path for parsing:")
+        path=input("input path:")
     if not path_regex:
         path_regex= input("input path regex:")
     name_extension=os.path.splitext(os.path.basename(path))[-1]
     name=os.path.splitext(os.path.basename(path))[0]
-    print(name)
-    print("regex:",path_regex)
+    print("string to parse:", name)
+    print("regex:", path_regex)
     match = re.search(path_regex,name)
     if not match:
-        path_regex = input("Try another regex:")
+        path_regex = input("no match, try another regex (no quote mark or excape character):")
         if path_regex == chr(27) or path_regex =="":
             return -1
         else:
@@ -391,9 +391,7 @@ def setRegex(path="", path_regex=""):
                 setRegex(path=path, path_regex=path_regex)
 
 
-def main(folder="", primers=['27F', '1492R'], mod="auto", 
-        check_len=0, thredhold=30, break_num=3, fastacut=[20, 750], 
-        verbose=True, out="none", set_regex=False, regex_para=[]):
+def main():
     """
     Functions:
         1. 输入文件，优先导入ab1，生成record_dict
@@ -408,16 +406,50 @@ def main(folder="", primers=['27F', '1492R'], mod="auto",
         fastacut:<list> fasta序列的默认剪切范围，默认20-750bp。
         verbose: <bool> 是不是要显示数据处理的全过程
         out:导出数据：none-不导出，single-一个文件一条序列，one-结果导出为1个文件
-        set_regex: <bool>是否要设置文件名的解析正则表达式。
-        regex_para: <list> primer所属group，sample所属的group，正则表达式。
+        set_regex: <bool>是否要设置文件名的解析正则表达式。正则表达式不需要转义或引号。
+        regex_para: <list> primer所属group，sample所属的group，正则表达式，使用r""，或转义符。
     Returns:
         merge_dict: <dict> 数据结构是{sample:[record1,record2,record3],}。
+        //Fix: 把args放到main里面
     """
+    import argparse
+    # 创建参数解析器
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    # 添加参数
+    parser.add_argument('--folder', type=str, default="", help='the folder containing seq files')    
+    parser.add_argument('--primers', nargs='+', default=['27F', '1492R'], help='list of primer names')
+    parser.add_argument('--mod', type=str, default='auto', choices=["auto","mannual"], help='mode of trimming')
+    parser.add_argument('--check_len', type=int, default=0, help='minimum length of trimmed sequence')
+    parser.add_argument('--thredhold', type=int, default=30, help='phred threshold')
+    parser.add_argument('--break_num', type=int, default=3, help='number of consecutive errors to stop trimming')
+    parser.add_argument('--fastacut', nargs='+', default=[20, 750], help='range of fasta sequence to trim')
+    parser.add_argument('--verbose', type=bool, default=True, help='whether to display processing information')
+    parser.add_argument('--out', type=str, default='none', help='output data: none- no output, single- one sequence per file, one- output all data to one file')
+    parser.add_argument('--regex_para', nargs='+', default=[2, 1,"\\w{4}_(.*)_\\[(\\w+)\\]" ], help='primer group, sample group, regex used to parse file name')
+    parser.add_argument('--set_regex', type=bool, default=False, help='whether set regex for file name parsing')
+    parser.add_argument('--test', type=bool, default=False, help='do test')
+
+
+    # 解析参数
+    args = parser.parse_args()
+    args.test = True
+    # 运行main函数
+    if args.test:
+        # 测试时使用
+        args.folder = "E:\\Desktop\\python-learn-2023\\4-mergeSeq\\mergeSeq\\examples\\sequences"
+        args.out = "single"
+        args.set_regex = True
+
+
+    
     # 1 输入阶段--------
     # 判断folder是不是一个文件夹，如果是，提取里面全部的文件名保存到paths
-    if verbose:
-        print("-----------input-----------")
-    if folder=="":
+    if args.verbose:
+        if args.set_regex:
+            print("-----------set regex-----------")
+        else:
+            print("-----------input-----------")
+    if args.folder=="":
         # 通过对话框输入   
         root = Tk()
         # 隐藏Tk窗口
@@ -426,24 +458,25 @@ def main(folder="", primers=['27F', '1492R'], mod="auto",
         paths = filedialog.askopenfilenames()
         paths = list(paths)
     else:    
-        if os.path.isdir(folder):
-            paths = os.listdir(folder)
-            paths = [os.path.join(folder, path) for path in paths]   
+        if os.path.isdir(args.folder):
+            paths = os.listdir(args.folder)
+            paths = [os.path.join(args.folder, path) for path in paths]   
         else:
             print("Error: Input is not a folder.")
             return 
    
     # 文件排序 
     paths.sort(key=lambda x: (not x.endswith('ab1'), x.endswith('ab1') and x))
-    if set_regex:
-        #//Fix: 显示前10个导入的路径，选择其中1个进行解析，输出
+    if args.set_regex:
         regex_para= setRegex()
         if regex_para == -1:
             print("Failed: setting path_regex")
             return
+    else:
+        regex_para=args.regex_para
     # 解析文件名构建保存数据的字典
     if len(regex_para)==3 and isinstance(regex_para, list):
-        record_dict = checkFiles(paths, primers, regex_para)
+        record_dict = checkFiles(paths, args.primers, regex_para)
     else:
         print("need regex_para")
         return
@@ -453,7 +486,7 @@ def main(folder="", primers=['27F', '1492R'], mod="auto",
     # 遍历文件导入
     for path in paths:
         # 解析文件名 如果无法解析到primer信息，就停止导入
-        path_var = pathPaser(path, primers, regex_para)
+        path_var = pathPaser(path, args.primers, regex_para)
         if path_var['check'] == True:
             # 判断该文件是否存在
             if not checkRecordDict(record_dict, path_var):
@@ -463,28 +496,30 @@ def main(folder="", primers=['27F', '1492R'], mod="auto",
                 else:
                     record = fasIO(path_var)
                     record_dict[path_var['sample']].append(record)
-    if verbose:
+    if args.verbose:
         showRecordDict(record_dict)
     # 2 剪切阶段----------
     record_dict_clean = defaultdict(list)
     record_dict_clean = checkPair(record_dict)
     # 保存结果用字典
     merge_dict = {k: [] for k in record_dict_clean.keys()}
-    if mod == "auto":
+    if args.mod == "auto":
         # Index生成
         for sample in record_dict_clean.keys():
             for record in record_dict_clean[sample]:
                 if record.type == ".ab1":                  
-                    ab1cut = phred2Index(record, check_len, thredhold, break_num)
+                    ab1cut = phred2Index(record, args.check_len, args.thredhold, args.break_num)
                     merge_dict[sample].append(trimFasta(ab12Fas(record), index=ab1cut))
                 else:
-                    merge_dict[sample].append(trimFasta(record, index=fastacut))
-        if verbose:
+                    merge_dict[sample].append(trimFasta(record, index=args.fastacut))
+        if args.verbose:
             print("-----------cut-----------")
             showRecordDict(merge_dict)  
+    if args.mod == "mannual":
+        merge_dict[sample].append(trimFasta(record, index=args.fastacut))
     # 3 拼接阶段-----------
-    if out =="one" and os.path.exists(os.path.join(folder,"output.fasta")):
-        os.remove(os.path.join(folder,"output.fasta"))
+    if args.out =="one" and os.path.exists(os.path.join(args.folder,"output.fasta")):
+        os.remove(os.path.join(args.folder,"output.fasta"))
         print("Warning: the output file is deleted!")
 
     for sample in merge_dict.keys():
@@ -495,53 +530,27 @@ def main(folder="", primers=['27F', '1492R'], mod="auto",
         seqM = mergeSeq(seqF.seq, seqR.seq)  # 需要转化为Seq对象
         if isinstance(seqM, int):
             continue
-        description = f"len={str(seqM[3])}bp|{str(seqM[1])}% aligned of {str(seqM[2])}bp|{primers[0]} {primers[1]}"
+        description = f"len={str(seqM[3])}bp|{str(seqM[1])}% aligned of {str(seqM[2])}bp|{args.primers[0]} {args.primers[1]}"
         merged_seq = SeqRecord(seq=seqM[0], name=sample+"_[merge]", id=sample+"_[merge]",
                                description=description)
         merged_seq.primer = "merge"
         merged_seq.type = ".fasta"
         merge_dict[sample].append(merged_seq)
         # 拼接完成后是否输出summary
-        if verbose:
+        if args.verbose:
             print("-----------merge-----------")
             showRecordDict(merge_dict)
         # 拼接完后是否导出数据
-        if out == "none":
+        if args.out == "none":
             return merge_dict
-        elif out == "single":
-            SeqIO.write(merged_seq, os.path.join(folder,merged_seq.name+merged_seq.type), "fasta")
+        elif args.out == "single":
+            SeqIO.write(merged_seq, os.path.join(args.folder,merged_seq.name+merged_seq.type), "fasta")
         elif out == "one":
-            with open(os.path.join(folder,"output.fasta"), "a") as output_file:
+            with open(os.path.join(args.folder,"output.fasta"), "a") as output_file:
                 SeqIO.write(merged_seq, output_file, "fasta")
-    if verbose:
+    if args.verbose:
         print("\n")
     return merge_dict
 
-if __name__ == "__main__":
-    import argparse
-    # 创建参数解析器
-    parser = argparse.ArgumentParser(description='Process some integers.')
-    # 添加参数
-    parser.add_argument('--folder', type=str, default="", help='the folder containing seq files')    
-    parser.add_argument('--primers', nargs='+', default=['27F', '1492R'], help='list of primer names')
-    parser.add_argument('--mod', type=str, default='auto', help='mode of trimming')
-    parser.add_argument('--check_len', type=int, default=0, help='minimum length of trimmed sequence')
-    parser.add_argument('--thredhold', type=int, default=30, help='phred threshold')
-    parser.add_argument('--break_num', type=int, default=3, help='number of consecutive errors to stop trimming')
-    parser.add_argument('--fastacut', nargs='+', default=[20, 750], help='range of fasta sequence to trim')
-    parser.add_argument('--verbose', type=bool, default=True, help='whether to display processing information')
-    parser.add_argument('--out', type=str, default='none', help='output data: none- no output, single- one sequence per file, one- output all data to one file')
-    parser.add_argument('--regex_para', nargs='+', default=[2, 1,"\\w{4}_(.*)_\\[(\\w+)\\]" ], help='list of primer names')
-    parser.add_argument('--set_reget', type=bool, default=False, help='whether set regex for file name parsing')
-
-
-    # 解析参数
-    args = parser.parse_args()
-    # 运行main函数
-    # 测试时使用
-    #args.folder = "E:\\Desktop\\python-learn-2023\\4-mergeSeq\\mergeSeq\\examples\\sequences"
-    args.out = "single"
-    #args.set_regex=True
-
-
-    main(folder = args.folder, out=args.out, regex_para=args.regex_para)
+if __name__ == "__main__":  
+    main()
