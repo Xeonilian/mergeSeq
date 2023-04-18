@@ -132,3 +132,6 @@ dmypy.json
 
 # data example
 data-example/
+data/
+
+*.ini
