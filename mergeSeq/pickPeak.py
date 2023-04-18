@@ -16,6 +16,26 @@ def checkQuality(record):
     """
     检测指定范围是否是正常测序结果，Phred>30，允许有断裂不超过x个，
     """
+    # 根据阈值转变为boolean值
+    Phred_list = record.letter_annotations["phred_quality"]
+    
+    Phred_list_bool = [(x-thredhold) > 0 for x in Phred_list]
+    # 找到大于阈值的起点
+    for i, num in enumerate(Phred_list_bool):
+        if num:
+            index[0] = i
+            break
+    Phred_list = Phred_list[index[0]:]
+    Phred_list_bool = Phred_list_bool[index[0]:]
+    j=0
+    for j, num in enumerate(Phred_list_bool):
+        if j < (len(Phred_list)-1)/2: #过半之后开始找连续错误
+            continue
+        if not num: #出现了False
+            if not any(Phred_list_bool[j:j+break_num]):
+                index[1] = j+i
+                break
+
     return True
 def selectIndex(record):
     """
@@ -67,7 +87,11 @@ def main():
 # 检查文件是否存在
     if os.path.isfile(args.ab1_path):
         # 解析ABI文件
-        record = next(SeqIO.parse(args.ab1_path, "abi"))
+        try:
+            record = next(SeqIO.parse(args.ab1_path, "abi"))
+        except StopIteration:
+            print("Error: No records found in ABI file")
+            sys.exit(1)
         # 检查序列质量
         if checkQuality(record):
             # 根据模式选择序列切割方式
@@ -99,17 +123,17 @@ def main():
                 # 如果切割失败，根据verbos参数输出错误信息
                 if args.verbos:
                     print("Please give an index!")
-                return 
+                sys.exit(1) 
         else:
             # 如果序列质量过低，输出错误信息
             if args.verbos:
                 print("The quaility of sequence is too low to parse!")
-            return
+            sys.exit(1)
     else:
         # 如果文件不存在，输出错误信息
         if args.verbos:
             print("Wrong Path!")
-        return
+        sys.exit(1)
 
 if __name__ == "__main__":  
     main()
