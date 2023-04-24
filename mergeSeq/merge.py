@@ -167,28 +167,29 @@ def checkPair(record_dict):
     record_dict_check = {k: v for k, v in record_dict.items() if isinstance(v, list) and len(v) == 2}
     return record_dict_check
 
-def phred2Index(record, check_len=0, thredhold=30, break_num=3):
+def phred2Index(record, check_len=20, cutoff=0.05, break_num=3):
     """
     将Phred转化为index，找到第一个大于阈值的位置，然后从序列全长一半的位置开始找连续3个碱基的质量小于阈值的位置，返回位置信息。
 
     Args:
         record: <SeqRecord> 序列记录。
         check_len: <int> 检查序列长度，默认为0也就是不检查。
-        thredhold: <int> 阈值，默认30。
+        cutoff: <int> 阈值，默认0.05，正确率95%。
         break_num: <int> 连续低于阈值的碱基数，默认3，数字越大返回的序列越长。
 
     Returns:
         index: <list> 包含起始和终止位置的列表。
     
-    Note: thredhold调整为20或40效果没有进行测试，目前30能够从>1000bp的序列中返回800bp左右的序列
+    Note: cutoff调整为20或40效果没有进行测试，目前30能够从>1000bp的序列中返回800bp左右的序列
     """
+    import math
     index = [-1, -1]  # 如果是空的，后面赋值就会有问题，这里有-1+1=0也没有办法通过最后的长度检测
     # 根据阈值转变为boolean值
     Phred_list = record.letter_annotations["phred_quality"]
     if not Phred_list:
         return index   
-    Phred_list_bool = [(x-thredhold) > 0 for x in Phred_list]
-    # 找到大于阈值的起点
+    Phred_list_bool = [cutoff-10 ** (x/-10.0) > 0 for x in Phred_list]
+    # 找到小于阈值的起点，越小说明正确率约高
     for i, num in enumerate(Phred_list_bool):
         if num:
             index[0] = i
@@ -410,7 +411,6 @@ def main():
         regex_para: <list> primer所属group，sample所属的group，正则表达式，使用r""，或转义符。
     Returns:
         merge_dict: <dict> 数据结构是{sample:[record1,record2,record3],}。
-        //Fix: 把args放到main里面
     """
     import argparse
     # 创建参数解析器
@@ -420,7 +420,7 @@ def main():
     parser.add_argument('--primers', nargs='+', default=['27F', '1492R'], help='list of primer names')
     parser.add_argument('--mod', type=str, default='auto', choices=["auto","mannual"], help='mode of trimming')
     parser.add_argument('--check_len', type=int, default=0, help='minimum length of trimmed sequence')
-    parser.add_argument('--thredhold', type=int, default=30, help='phred threshold')
+    parser.add_argument('--cutoff', type=float, default=0.05, help='phred threshold')
     parser.add_argument('--break_num', type=int, default=3, help='number of consecutive errors to stop trimming')
     parser.add_argument('--fastacut', nargs='+', default=[20, 750], help='range of fasta sequence to trim')
     parser.add_argument('--verbose', type=bool, default=True, help='whether to display processing information')
@@ -508,7 +508,7 @@ def main():
         for sample in record_dict_clean.keys():
             for record in record_dict_clean[sample]:
                 if record.type == ".ab1":                  
-                    ab1cut = phred2Index(record, args.check_len, args.thredhold, args.break_num)
+                    ab1cut = phred2Index(record, args.check_len, args.cutoff, args.break_num)
                     merge_dict[sample].append(trimFasta(ab12Fas(record), index=ab1cut))
                 else:
                     merge_dict[sample].append(trimFasta(record, index=args.fastacut))
